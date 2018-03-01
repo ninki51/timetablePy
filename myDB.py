@@ -12,7 +12,7 @@ class DB:
         db = pymysql.connect("localhost", "root", "chenjian", "timetable")
         return db
 
-    def addCell2DB(self, classID, Num, teacherID, subjectID):
+    def addCell2DB(self, classID, Num, teacherID, subjectID, move):
         # 打开数据库连接
         db = self.getConn()
 
@@ -21,8 +21,8 @@ class DB:
 
         # SQL 插入语句
         sql = "INSERT INTO cell(name, \
-                 classID, Num, teacherID, subjectID) \
-                 VALUES ('%s', %d, %d, %d, %d)" % (self.tbName, classID, Num, teacherID, subjectID)
+                 classID, Num, teacherID, subjectID,move) \
+                 VALUES ('%s', %d, %d, %d, %d, %d)" % (self.tbName, classID, Num, teacherID, subjectID, move)
         try:
             # 执行sql语句
             cursor.execute(sql)
@@ -130,3 +130,4 @@ class DB:
 
         # 关闭数据库连接
         db.close()
+
