@@ -4,10 +4,19 @@ import random
 import myDB
 import csv1 as gl
 
-db = myDB.DB("test13")
+db = myDB.DB("test25")
 
 # 教师列表（无重复）
 teacher_list = []
+
+# 班级列表
+class_arr = []
+
+# 固定课程
+fixed_list = []
+
+# 班级约束数组
+class_cond_list = []
 
 
 # 判断是否是固定课程
@@ -16,6 +25,13 @@ def isFixed(subject):
         for col in row:
             if subject == col:
                 return True
+    return False
+
+
+def isFixed2(sno, subject):
+    for row in fixed_list:
+        if sno == row[0] and subject == row[1]:
+            return True
     return False
 
 
@@ -35,16 +51,15 @@ def timeChongtu(cell):
 
 # 班级列表
 def getClassArr():
-    cls_arr = []
+    if len(class_arr) > 0:
+        del class_arr[:]
     for row in gl.arr:
-        cls_arr.append(row[0])
-    return cls_arr
+        class_arr.append(row[0])
 
 
 # 授课安排表
 def getCell():
     # 班级列表
-    cls_arr = getClassArr()
     # 总课时
     total_nums = len(gl.week_arr) * len(gl.base)
     print("总课时=", total_nums)
@@ -52,7 +67,11 @@ def getCell():
     cell = []
     i = 0
     for row in gl.arr:
-        k = cls_arr[i]
+        # 班级
+        k = class_arr[i]
+        if len(k) == 0:
+            print("班级不能为空!")
+            return
         # print(k)
         # teacher-subject
         ts = []
@@ -73,24 +92,30 @@ def getCell():
                 else:
                     subject_nums_arr.append(0)
             j += 1
+
         j = 0
+        # print("教师：", tea)
+        # print("课时数组:", subject_nums_arr)
         # 课程序号
+
         sno = 0
         for nums in subject_nums_arr:
-            teacher = tea[j]
-            # 判断是否是固定课程
             subject = gl.subject[j]
+            # 注意：teacher有可能为空
+            teacher = tea[j]
+            # if teacher == "":
+            #     j += 1
 
             for x in range(nums):
                 ts.append([sno, teacher, subject])
-                db.addCell2DB(i, sno, getTeacherID(teacher), j)
+                # db.addCell2DB(i, sno, getTeacherID(teacher), getSubjectID(subject))
                 sno += 1
 
             j += 1
         # 补齐空白时间块
         for aa in range(total_nums - sno):
             ts.append([sno, 999, 999])
-            db.addCell2DB(i, sno, 999, 999)
+            # db.addCell2DB(i, sno, 999, 999)
             sno += 1
         dict = {k: ts}
         cell.append(dict)
@@ -124,6 +149,8 @@ def getSubjectID(s):
             return idx
         idx += 1
     return -1
+
+
 # 查找weekID
 def getWeekID(w):
     idx = 0
@@ -132,10 +159,12 @@ def getWeekID(w):
             return idx
         idx += 1
     return -1
+
+
 # 查找classID
-def getClassID(c,c_arr):
+def getClassID(c):
     idx = 0
-    for name in c_arr:
+    for name in class_arr:
         if name == c:
             return idx
         idx += 1
@@ -151,20 +180,27 @@ def place2db():
         cap = int(p[2])
         db.addPlace2DB(place, subjectID, cap)
 
-#班级约束
-def classCond2db(c_arr):
+
+# 班级约束
+def classCond2db():
     for c in gl.class_cond:
         wid = getWeekID(c[0])
-        rowid = c[1]
-        cid = getClassID(c[2],c_arr)
+        rowid = c[1] - 1
+        cid = getClassID(c[2])
         db.addClassCond2DB(wid, rowid, cid)
-#教师约束
+        sno = rowid * len(gl.base[0]) + wid
+        class_cond_list.append([sno, cid])
+    print("班级约束=", class_cond_list)
+
+
+# 教师约束
 def teacherCond2db():
     for t in gl.teacher_cond:
         wid = getWeekID(t[0])
-        rowid = t[1]
+        rowid = t[1] - 1
         tid = getTeacherID(t[2])
         db.addTeacherCond2DB(wid, rowid, tid)
+
 
 # 基础信息写入数据库
 def base2db():
@@ -184,7 +220,54 @@ def base2db():
 
 
 # 把固定课程移动到位
-def moveFixed():
+def moveFixed(cell):
+    for dict in cell:
+        for k in dict:
+            # 每个班
+            row = dict[k]
+            # 要交换的ID
+            sid0 = sid1 = -1
+            for f in fixed_list:
+                sid0 = f[0]
+                fixedSubject = f[1]
+                for col in row:
+                    sno = col[0]
+                    teacher = col[1]
+                    subject = col[2]
+                    if subject == fixedSubject:
+                        sid1 = sno
+                        break
+                # 交换位置
+                if sid0 > -1 and sid1 > -1:
+                    row[sid0][1], row[sid1][1] = row[sid1][1], row[sid0][1]
+                    row[sid0][2], row[sid1][2] = row[sid1][2], row[sid0][2]
+
+
+# 移动空白位置
+def moveBlank(cell):
+    for dict in cell:
+        for k in dict:
+            # 每个班
+            row = dict[k]
+            # 要交换的ID
+            sid0 = sid1 = -1
+            for f in class_cond_list:
+                sid0 = f[0]
+                clsid = f[1]
+                for col in row:
+                    sno = col[0]
+                    if col[1] == 999 and clsid == getClassID(k):
+                        sid1 = sno
+                        break
+                # 交换位置
+                if sid0 > -1 and sid1 > -1:
+                    row[sid0][1], row[sid1][1] = row[sid1][1], row[sid0][1]
+                    row[sid0][2], row[sid1][2] = row[sid1][2], row[sid0][2]
+                    break
+
+
+# 把固定课程放到fixed_list中
+def addFixed():
     row_id = 0
     for row in gl.base:
         col_id = 0
@@ -193,22 +276,60 @@ def moveFixed():
                 subject_id = getSubjectID(col)
                 sno = row_id * len(gl.week_arr) + col_id
                 print(col, '.序号:', sno, '.id:', subject_id)
+                fixed_list.append([sno, col])
             col_id += 1
         row_id += 1
+
+
+def cell2db(cell):
+    for dict in cell:
+        for k in dict:
+            # 每个班
+            row = dict[k]
+            clsid = getClassID(k)
+            for col in row:
+                sno = col[0]
+                teacher = col[1]
+
+                subject = col[2]
+
+                move = 1
+                if teacher == 999:
+                    move = 0
+                    teacher_id = 999
+                else:
+                    teacher_id = getTeacherID(teacher)
+                if subject == 999:
+                    subject_id = 999
+                else:
+                    subject_id = getSubjectID(subject)
+                if isFixed2(sno, subject):
+                    move = 0
+                db.addCell2DB(clsid, sno, teacher_id, subject_id, move)
 
 
 def main():
     start = time.clock()
     # 基础信息
     base2db()
+    # 班级列表
+    getClassArr()
+    # print(class_arr)
+    # 班级约束
+    classCond2db()
+    # 提取固定课程
+    addFixed()
+    print(fixed_list)
+
     # 授课安排
     cell = getCell()
+
+    # 固定课程，摆正位置
+    moveFixed(cell)
+    moveBlank(cell)
+    cell2db(cell)
     print(cell)
 
-    class_arr = getClassArr()
-    print(class_arr)
-    # 班级约束
-    classCond2db(class_arr)
     # 教师约束
     teacherCond2db()
     print(teacher_list)
